@@ -5,6 +5,7 @@
 #include <cstring>
 #include <sys/socket.h>
 #include <sys/epoll.h>
+#include <unistd.h>
 
 Server::Server(int port, std::string password) : port(port), password(password)
 {
@@ -44,7 +45,7 @@ void Server::run()
 
 	struct epoll_event event;
 	event.data.fd = socket_descriptor;
-	event.events = EPOLLIN | EPOLLET;
+	event.events = EPOLLIN;
 	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, socket_descriptor, &event) == -1)
 	{
 		throw std::runtime_error("Could not add socket to epoll instance: " + std::string(strerror(errno)));
@@ -61,10 +62,14 @@ void Server::run()
 		{
 			int connection_descriptor;
 			if ((connection_descriptor = accept(socket_descriptor, (struct sockaddr *)&address, &address_length)) < 0)
-			{
 				throw std::runtime_error("Could not accept connection: " + std::string(strerror(errno)));
+			std::pair<int, Client> element(connection_descriptor, Client(connection_descriptor));
+			std::pair<std::map<int, Client>::iterator, bool>  result = clients.insert(element);
+			if (!result.second)
+			{
+				std::cout << "Connection already exists: " << connection_descriptor << std::endl;
+				result.first->second = element.second;
 			}
-			clients.insert(std::pair<int, Client>(connection_descriptor, Client(connection_descriptor)));
 			std::cout << "New connection: " << connection_descriptor << std::endl;
 		}
 	}

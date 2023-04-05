@@ -11,6 +11,7 @@ class Client
 	int connection_descriptor;
 public:
 	Client(int connection_descriptor);
+	~Client();
 };
 
 
