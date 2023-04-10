@@ -1,6 +1,7 @@
 #include "server.hpp"
 #include <string>
 #include <iostream>
+#include <cstdio>
 #include <cerrno>
 #include <cstring>
 #include <sys/socket.h>
@@ -43,9 +44,7 @@ void Server::run()
 		throw std::runtime_error("Could not create epoll instance: " + std::string(strerror(errno)));
 	}
 
-	struct epoll_event event;
-	event.data.fd = socket_descriptor;
-	event.events = EPOLLIN;
+	struct epoll_event event = {.events = EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLET, .data = {.fd = socket_descriptor}};
 	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, socket_descriptor, &event) == -1)
 	{
 		throw std::runtime_error("Could not add socket to epoll instance: " + std::string(strerror(errno)));
@@ -53,10 +52,9 @@ void Server::run()
 
 	while (true)
 	{
+		std::cout << "Waiting for events..." << std::endl;
 		if (epoll_wait(epoll_fd, &event, 1, -1) < 0)
-		{
 			throw std::runtime_error("Could not wait for epoll events: " + std::string(strerror(errno)));
-		}
 
 		if (event.data.fd == socket_descriptor)
 		{
@@ -64,13 +62,56 @@ void Server::run()
 			if ((connection_descriptor = accept(socket_descriptor, (struct sockaddr *)&address, &address_length)) < 0)
 				throw std::runtime_error("Could not accept connection: " + std::string(strerror(errno)));
 			std::pair<int, Client> element(connection_descriptor, Client(connection_descriptor));
-			std::pair<std::map<int, Client>::iterator, bool>  result = clients.insert(element);
+			std::pair<std::map<int, Client>::iterator, bool> result = clients.insert(element);
 			if (!result.second)
 			{
 				std::cout << "Connection already exists: " << connection_descriptor << std::endl;
 				result.first->second = element.second;
 			}
 			std::cout << "New connection: " << connection_descriptor << std::endl;
+			event = (struct epoll_event){.events = EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLET, .data = {.fd = connection_descriptor}};
+			if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, connection_descriptor, &event) == -1)
+				throw std::runtime_error("Could not add connection to epoll instance: " + std::string(strerror(errno)));
+		}
+		if (event.events & EPOLLIN)
+		{
+			std::cout << "EPOLLIN on file descriptor " << event.data.fd << std::endl;
+			// Read the first 512 bytes and dump them to stdout
+			char buffer[512];
+			int bytes_read = recv(event.data.fd, buffer, 512, 0);
+			if (bytes_read < 0)
+				throw std::runtime_error("Could not read from socket: " + std::string(strerror(errno)));
+			std::cout << "Read " << bytes_read << " bytes from socket " << event.data.fd << std::endl;
+			// Escape the non printable characters and print them to stdout
+			for (int i = 0; i < bytes_read; i++)
+			{
+				if (buffer[i] >= 32 && buffer[i] <= 126)
+					std::cout << buffer[i];
+				else // print the hex value of the character in the format \x00
+					std::cout << "\\x" << std::hex << (int)buffer[i] << std::dec;
+			}
+			std::cout << std::endl;
+		}
+		if (event.events & EPOLLOUT)
+			std::cout << "EPOLLOUT on file descriptor " << event.data.fd << std::endl;
+		if (event.events & EPOLLRDHUP)
+		{
+			std::cout << "EPOLLRDHUP on file descriptor " << event.data.fd << std::endl;
+			// Remove the client from the map
+			clients.erase(event.data.fd);
+			// Finalize the connection
+			if (shutdown(event.data.fd, SHUT_RDWR) < 0)
+				throw std::runtime_error("Could not shutdown socket: " + std::string(strerror(errno)));
+			close(event.data.fd);
+			std::cout << "Closed file descriptor: " << event.data.fd << std::endl;
+		}
+
+		if (event.events & EPOLLHUP)
+			std::cout << "EPOLLHUP on file descriptor " << event.data.fd << std::endl;
+		if (event.events & EPOLLERR)
+		{
+			std::cout << "EPOLLERR on file descriptor " << event.data.fd << "\tError number: " << errno << std::endl;
+			perror("Error: ");
 		}
 	}
 }

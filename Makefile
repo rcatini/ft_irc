@@ -1,7 +1,7 @@
 NAME=ircserv
 CC=g++
 CXX=g++
-CXXFLAGS=-Wall -Wextra -Werror -std=c++98 -pedantic -g -MMD
+CXXFLAGS=-Wall -Wextra -Werror -std=c++98 -g -MMD
 SRC=ircserv.cpp server.cpp client.cpp
 OBJ=$(SRC:.cpp=.o)
 DEPENDS=$(SRC:.cpp=.d)
