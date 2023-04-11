@@ -80,7 +80,8 @@ void Server::run()
 			std::cout << "EPOLLIN on file descriptor " << event.data.fd << std::endl;
 			// Read the first 512 bytes and dump them to stdout
 			char buffer[512];
-			int bytes_read = recv(event.data.fd, buffer, 512, 0);
+			// nonblocking read
+			int bytes_read = recv(event.data.fd, buffer, 512, MSG_DONTWAIT);
 			if (bytes_read < 0)
 				throw std::runtime_error("Could not read from socket: " + std::string(strerror(errno)));
 			std::cout << "Read " << bytes_read << " bytes from socket " << event.data.fd << std::endl;
