@@ -114,7 +114,7 @@ RFC 2812          Internet Relay Chat: Client Protocol        April 2000
 Kalt                         Informational                      [Page 2]
 
 RFC 2812          Internet Relay Chat: Client Protocol        April 2000
-
+7
 
    4.  Optional features ..........................................  38
       4.1  Away ...................................................  38

@@ -5,7 +5,7 @@
 #include <iostream>
 #include "client.hpp"
 
-Client::Client(int connection_descriptor) : connection_descriptor(connection_descriptor)
+Client::Client()
 {
 	std::cout << "Client constructed" << std::endl;
 }

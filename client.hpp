@@ -3,16 +3,13 @@
 
 #include <string>
 #include <sys/socket.h>
+#include "user.hpp"
 
-class Client
+class Client : public User
 {
-	std::string name;
-	std::string host;
-	int connection_descriptor;
 public:
-	Client(int connection_descriptor);
+	Client();
 	~Client();
 };
-
 
 #endif

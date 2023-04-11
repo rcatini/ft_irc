@@ -54,19 +54,21 @@ void Server::run()
 	{
 		std::cout << "Waiting for events..." << std::endl;
 		if (epoll_wait(epoll_fd, &event, 1, -1) < 0)
-			throw std::runtime_error("Could not wait for epoll events: " + std::string(strerror(errno)));
+		{
+			std::cout << "Stopping server: Error while waiting for events: " << strerror(errno) << std::endl;
+			close(epoll_fd);
+			break;
+		}
 
 		if (event.data.fd == socket_descriptor)
 		{
 			int connection_descriptor;
 			if ((connection_descriptor = accept(socket_descriptor, (struct sockaddr *)&address, &address_length)) < 0)
 				throw std::runtime_error("Could not accept connection: " + std::string(strerror(errno)));
-			std::pair<int, Client> element(connection_descriptor, Client(connection_descriptor));
-			std::pair<std::map<int, Client>::iterator, bool> result = clients.insert(element);
+			std::pair<std::map<int, Client>::iterator, bool> result = clients.insert(std::make_pair(connection_descriptor, Client()));
 			if (!result.second)
 			{
-				std::cout << "Connection already exists: " << connection_descriptor << std::endl;
-				result.first->second = element.second;
+				throw std::runtime_error("Could not insert client into map, file descriptor already exists");
 			}
 			std::cout << "New connection: " << connection_descriptor << std::endl;
 			event = (struct epoll_event){.events = EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLET, .data = {.fd = connection_descriptor}};
@@ -105,7 +107,6 @@ void Server::run()
 			close(event.data.fd);
 			std::cout << "Closed file descriptor: " << event.data.fd << std::endl;
 		}
-
 		if (event.events & EPOLLHUP)
 			std::cout << "EPOLLHUP on file descriptor " << event.data.fd << std::endl;
 		if (event.events & EPOLLERR)
@@ -114,4 +115,20 @@ void Server::run()
 			perror("Error: ");
 		}
 	}
+
+	std::cout << "Shutting down server..." << std::endl;
+	std::cout << "Closing " << clients.size() << " connections..." << std::endl;
+	for (std::map<int, Client>::iterator client = clients.begin(); client != clients.end(); client++)
+	{
+		std::cout << "Closing connection: " << client->first << std::endl;
+		if (shutdown(client->first, SHUT_RDWR) < 0)
+			throw std::runtime_error("Could not shutdown socket: " + std::string(strerror(errno)));
+		close(client->first);
+	}
+
+	// Shutdown the socket
+	std::cout << "Closing socket..." << std::endl;
+	if (shutdown(socket_descriptor, SHUT_RDWR) < 0)
+		throw std::runtime_error("Could not shutdown socket: " + std::string(strerror(errno)));
+	close(socket_descriptor);
 }

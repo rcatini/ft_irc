@@ -1,6 +1,9 @@
 #include <iostream>
 #include <cstdlib>
+#include <csignal>
 #include "server.hpp"
+
+void empty_handler(int) {}
 
 int main(int argc, char *argv[])
 {
@@ -19,12 +22,14 @@ int main(int argc, char *argv[])
 	}
 
 	std::string password = argv[2];
-
-	try {
-		Server server(port, password);
-		server.run();
-	} catch (std::runtime_error &e) {
-		std::cout << e.what() << std::endl;
-		return 1;
+	std::signal(SIGINT, empty_handler);
+	try
+	{
+		Server(port, password).run();
 	}
+	catch (std::runtime_error &e)
+	{
+		std::cout << e.what() << std::endl;
+	}
+	std::cout << "Server stopped" << std::endl;
 }
