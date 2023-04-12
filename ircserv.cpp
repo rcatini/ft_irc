@@ -3,7 +3,13 @@
 #include <csignal>
 #include "server.hpp"
 
-void empty_handler(int) {}
+static bool should_shutdown = false;
+
+void signal_handler(int signal)
+{
+	if (signal == SIGINT)
+		should_shutdown = true;
+}
 
 int main(int argc, char *argv[])
 {
@@ -21,15 +27,16 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	std::signal(SIGINT, signal_handler);
 	std::string password = argv[2];
-	std::signal(SIGINT, empty_handler);
 	try
 	{
-		Server(port, password).run();
+		Server server(should_shutdown, port, password);
+		server.run();
 	}
 	catch (std::runtime_error &e)
 	{
-		std::cout << e.what() << std::endl;
+		std::cout << "Unhandled exception: " << e.what() << std::endl;
 	}
 	std::cout << "Server stopped" << std::endl;
 }

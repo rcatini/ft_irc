@@ -5,11 +5,14 @@
 #include <sys/socket.h>
 #include "user.hpp"
 
-class Client : public User
+class Client
 {
+
 public:
-	Client();
-	~Client();
+	int read(int fd);
+	int write(int fd);
+	void connect(int *fd);
+	void quit();
 };
 
 #endif
