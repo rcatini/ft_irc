@@ -12,7 +12,7 @@ class Server
 	int port;
 	std::string password;
 	int fd;
-	bool &should_shutdown;
+	bool &teardown;
 	struct sockaddr address;
 	socklen_t address_length;
 	std::map<int, Client> clients;
