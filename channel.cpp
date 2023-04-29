@@ -14,17 +14,17 @@ Channel::~Channel()
 // Get channel name
 std::string Channel::getName()
 {
-	return name;
+    return name;
 }
 
 // Get channel topic
 std::string Channel::getTopic()
 {
-	return topic;
+    return topic;
 }
 
 // Set channel topic
 void Channel::setTopic(std::string &new_topic)
 {
-	this->topic = new_topic;
+    this->topic = new_topic;
 }
