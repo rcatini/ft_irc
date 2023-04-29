@@ -5,20 +5,24 @@
 
 static bool teardown = false;
 
+// Signal handler for SIGINT
 void signal_handler(int signal)
 {
+	// Set teardown flag
 	if (signal == SIGINT)
 		teardown = true;
 }
 
 int main(int argc, char *argv[])
 {
+	// Check number of arguments
 	if (argc != 3)
 	{
 		std::cerr << "Usage: " << argv[0] << "./ircserv <port> <password>" << std::endl;
 		return 1;
 	}
 
+	// Check port number
 	char *endpointer;
 	int port = std::strtol(argv[1], &endpointer, 10);
 	if (*endpointer != '\0' || port <= 0 || port > 65535)
@@ -27,16 +31,17 @@ int main(int argc, char *argv[])
 		return 2;
 	}
 
+	// Set up signal handler
 	std::signal(SIGINT, signal_handler);
-	std::string password = argv[2];
+
+	// Run server
 	try
 	{
-		Server server(teardown, port, password);
+		Server server(teardown, port, argv[2]);
 		server.run();
 	}
 	catch (std::runtime_error &e)
 	{
-		std::cout << "Unhandled exception: " << e.what() << std::endl;
+		std::cout << "Fatal error: " << e.what() << std::endl;
 	}
-	std::cout << "Server stopped" << std::endl;
 }

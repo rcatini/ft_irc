@@ -34,37 +34,37 @@ int Server::handle_server_event(struct epoll_event event)
 	int connection_descriptor;
 	if ((connection_descriptor = accept(this->fd, &this->address, &this->address_length)) < 0)
 		throw std::runtime_error("could not accept connection: " + std::string(strerror(errno)));
-	std::pair<std::map<int, Client>::iterator, bool> result = clients.insert(std::make_pair(connection_descriptor, Client()));
+	std::pair<std::map<int, User>::iterator, bool> result = users.insert(std::make_pair(connection_descriptor, User(connection_descriptor)));
 	if (!result.second)
-		throw std::runtime_error("could not insert client into map, file descriptor already exists");
+		throw std::runtime_error("could not insert user into map, file descriptor already exists");
 	return connection_descriptor;
 }
 
-void Server::handle_client_event(struct epoll_event event)
+void Server::handle_user_event(struct epoll_event event)
 {
-	Client &client = this->clients.at(event.data.fd);
+	User &user = this->users.at(event.data.fd);
 	if (event.events & ~(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLIN | EPOLLOUT))
-		throw std::runtime_error("unknown event on client socket");
+		throw std::runtime_error("unknown event on user socket");
 	if (event.events & EPOLLIN)
 	{
-		if (client.read(event.data.fd) < 0)
-			throw std::runtime_error("error in reading client socket");
-		std::vector<std::string> messages = client.parse_buffer();
+		if (user.read() < 0)
+			throw std::runtime_error("error in reading user socket");
+		std::vector<std::string> messages = user.parse_incoming_buffer();
 		for (std::vector<std::string>::iterator it = messages.begin(); it != messages.end(); ++it)
 			std::cout << *it << std::endl;
 	}
-	if (event.events & EPOLLOUT && client.write(event.data.fd) < 0)
-		throw std::runtime_error("error in writing client socket");
+	if (event.events & EPOLLOUT && user.write() < 0)
+		throw std::runtime_error("error in writing user socket");
 	if (event.events & EPOLLOUT)
-		client.write(event.data.fd);
+		user.write();
 	if (event.events & EPOLLERR)
-		throw std::runtime_error("error on client socket");
+		throw std::runtime_error("error on user socket");
 	if (event.events & EPOLLHUP || event.events & EPOLLRDHUP)
 	{
-		if (!this->clients.erase(event.data.fd))
-			throw std::runtime_error("could not erase client from map, file descriptor does not exist");
-		std::cerr << "client disconnected" << std::endl;
-		disconnect_client(event.data.fd);
+		if (!this->users.erase(event.data.fd))
+			throw std::runtime_error("could not erase user from map, file descriptor does not exist");
+		std::cerr << "user disconnected" << std::endl;
+		disconnect_user(event.data.fd);
 	}
 }
 
@@ -88,7 +88,7 @@ void Server::run()
 				throw std::runtime_error("could not add connection to epoll instance: " + std::string(strerror(errno)));
 		}
 		else
-			handle_client_event(event);
+			handle_user_event(event);
 	}
 	if (close(epoll_fd) < 0)
 		throw std::runtime_error("could not close epoll instance: " + std::string(strerror(errno)));
@@ -96,18 +96,9 @@ void Server::run()
 
 Server::~Server()
 {
-	for (std::map<int, Client>::iterator client = this->clients.begin(); client != this->clients.end(); client++)
-		disconnect_client(client->first);
+	for (std::map<int, User>::iterator user = this->users.begin(); user != this->users.end(); user++)
+		disconnect_user(user->first);
 	if (this->fd < 0 || shutdown(this->fd, SHUT_RDWR) < 0 || close(this->fd) < 0)
 		std::cerr << "could not cleanly destroy server: " << strerror(errno) << std::endl;
 	this->fd = -1;
-}
-
-void Server::disconnect_client(int client_fd)
-{
-	std::cout << "Disconnecting client " << client_fd << std::endl;
-	if (shutdown(client_fd, SHUT_RDWR) < 0)
-		throw std::runtime_error("could not shutdown client socket: " + std::string(strerror(errno)));
-	if (close(client_fd) < 0)
-		throw std::runtime_error("could not close client socket: " + std::string(strerror(errno)));
 }
