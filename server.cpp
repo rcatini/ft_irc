@@ -75,7 +75,7 @@ void Server::broadcast(std::string message, int sender_descriptor)
             continue;
 
         // Add message to outgoing queue
-        it->second.put_message(message);
+        it->second.put_message("Another user says: " + message);
     }
 }
 
@@ -198,7 +198,7 @@ void Server::run()
 // Stop the server cleanly closing all connections
 Server::~Server()
 {
-    // Destroy all users, bringing down all client connections
+    // Destroy all users, bringing down all user connections
     users.clear();
 
     // Close server socket

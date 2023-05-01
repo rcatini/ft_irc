@@ -43,59 +43,24 @@ User::~User()
 // Check if user has outgoing messages
 bool User::has_outgoing_messages()
 {
-    return outgoing_buffer.find(LINE_DELIM) != std::string::npos;
+    return outgoing_buffer.length() > 0;
 }
 
 // Extract message from incoming buffer
 std::string User::get_message()
 {
-    // Find end of line
-    std::size_t line_end = incoming_buffer.find(LINE_DELIM);
+    if (incoming_messages.empty())
+        throw std::logic_error("No messages to get");
 
-    // If no end of line, the buffer does not contain a complete message
-    if (line_end == std::string::npos)
-        throw std::logic_error("No complete message in buffer");
-
-    // If line is empty, read next message
-    if (line_end == 0)
-    {
-        incoming_buffer.erase(0, strlen(LINE_DELIM));
-        return get_message();
-    }
-
-    // Extract message from buffer
-    std::string message = incoming_buffer.substr(0, line_end);
-    incoming_buffer.erase(0, line_end + strlen(LINE_DELIM));
-
-    // Check message length
-    if (message.length() > MAX_MSG_LEN - strlen(LINE_DELIM))
-        throw std::length_error("Message too long");
-
-    std::cerr << "Message extracted from incoming buffer (client #" << fd << "): " << message << std::endl;
-
+    std::string message = incoming_messages.front();
+    incoming_messages.pop_front();
     return message;
 }
 
 // Check if user has outgoing messages
 bool User::has_incoming_messages()
 {
-
-    // Find end of line
-    std::size_t line_end = incoming_buffer.find(LINE_DELIM);
-
-    // If no end of line, the buffer does not contain a complete message
-    if (line_end == std::string::npos)
-        return false;
-
-    // If line is empty, look for next message
-    if (line_end == 0)
-    {
-        incoming_buffer.erase(0, strlen(LINE_DELIM));
-        return has_incoming_messages();
-    }
-
-    // If line is not empty, there is a complete message in the buffer
-    return true;
+    return incoming_messages.size() > 0;
 }
 
 // Append message to outgoing buffer
@@ -108,22 +73,58 @@ bool User::put_message(std::string message)
     if (message.length() > MAX_MSG_LEN - strlen(LINE_DELIM))
         throw std::length_error("Message too long");
 
-    // Add message to outgoing buffer (with line delimiter)
     outgoing_buffer.append(message + LINE_DELIM);
 
-    std::cerr << "Message added to outgoing buffer (client #" << fd << "): " << message << std::endl;
+    std::cerr << "Message added to outgoing (user #" << fd << "): " << message << std::endl;
 
     return true;
+}
+
+// Parse incoming buffer and put messages in incoming_messages
+void split_buffer(std::string &buffer, std::list<std::string> &messages)
+{
+    size_t line_delim_pos;
+
+    // While there are line delimiters in the incoming buffer
+    while ((line_delim_pos = buffer.find(LINE_DELIM)) != std::string::npos)
+    {
+        // If line delimiter is at the beginning of the string, ignore it
+        if (line_delim_pos == 0)
+        {
+            buffer.erase(0, strlen(LINE_DELIM));
+            continue;
+        }
+
+        // Extract message from incoming buffer
+        std::string message = buffer.substr(0, line_delim_pos);
+        buffer.erase(0, line_delim_pos + strlen(LINE_DELIM));
+        messages.push_back(message);
+    }
+
+    // Check if the remaining string is too long
+    if (buffer.length() > MAX_MSG_LEN)
+        throw std::length_error("Message too long");
 }
 
 // Consumes data from socket and appends it to incoming buffer
 ssize_t User::read()
 {
-    // Read data from socket
     char buf[MAX_MSG_LEN];
     ssize_t bytes_read;
+
+    // Read data from socket
     while ((bytes_read = recv(fd, buf, MAX_MSG_LEN, MSG_DONTWAIT)) > 0)
+    {
+        // Append data to incoming buffer
         incoming_buffer.append(buf, (unsigned long)bytes_read);
+
+        // If the string has grown over the maximum message length, parse it
+        if (incoming_buffer.length() > MAX_MSG_LEN)
+            split_buffer(incoming_buffer, incoming_messages);
+    }
+
+    // Parse the rest of the incoming data
+    split_buffer(incoming_buffer, incoming_messages);
 
     // Return 0 if operation would block (try again later)
     if (bytes_read < 0)
