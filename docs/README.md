@@ -1,5 +1,9 @@
 # ft_irc
 
+## Specification
+The project is a IRC server, as specified in RFC 1459 and RFC 2812.
+A modern version of the IRC protocol is also defined at [IRCv3](https://ircv3.net/irc/).
+
 ## Compilation
 The project can be compiled with the following command:
 
@@ -29,5 +33,7 @@ It can be tested with netcat with the following options:
 
 Example:
 ```
-nc -N -C localhost 6667
+nc -NC localhost 6667
 ```
+
+Multiple clients can be connected to the server, and they can be used to test the server (any message is broadcast to all clients).
