@@ -10,11 +10,16 @@
 #include <unistd.h>
 
 // Create server object, starting listening on port for TCP connections
-Server::Server(bool &teardown_ref, int server_port, std::string server_password) : port(server_port), password(server_password), fd(-1), teardown(teardown_ref)
+Server::Server(bool &teardown_ref, uint16_t server_port, std::string server_password) : port(server_port), password(server_password), fd(-1), teardown(teardown_ref)
 {
     // Create socket
     if ((this->fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         throw std::runtime_error("Could not create socket: " + std::string(strerror(errno)));
+
+    // Allow socket to be reused immediately after closing
+    int reuse = 1;
+    if (setsockopt(this->fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
+        throw std::runtime_error("Could not set socket option: " + std::string(strerror(errno)));
 
     // Construct address structure using IPv4 and the specified port
     struct sockaddr_in address_ipv4 = (struct sockaddr_in){AF_INET, htons(port), {INADDR_ANY}, {}};
@@ -27,10 +32,12 @@ Server::Server(bool &teardown_ref, int server_port, std::string server_password)
 
     // Start listening on socket
     if (listen(this->fd, 3) < 0)
-        throw std::runtime_error("Could not listen on socket: " + std::string(strerror(errno)));
+        throw std::runtime_error("Could not listen on socket #" + std::string(strerror(errno)));
+
+    std::cerr << "Listening on port " << port << "..." << std::endl;
 }
 
-// Detect an incoming connection, and handle it (throwing an exception if it fails)
+// Detect an incoming connection, and handle it
 int Server::handle_server_event(struct epoll_event event)
 {
     // Check for errors
@@ -41,7 +48,7 @@ int Server::handle_server_event(struct epoll_event event)
     else if (event.events & EPOLLRDHUP)
         throw std::runtime_error("socket closed");
     else if (event.events & ~EPOLLIN)
-        throw std::runtime_error("unknown event on server socket");
+        throw std::domain_error("unknown event on server socket");
 
     // Accept connection from new user
     int connection_descriptor;
@@ -51,7 +58,7 @@ int Server::handle_server_event(struct epoll_event event)
     // Add user to map
     std::pair<std::map<int, User>::iterator, bool> result = users.insert(std::make_pair(connection_descriptor, User(connection_descriptor)));
     if (!result.second)
-        throw std::runtime_error("could not insert user into map, file descriptor already exists");
+        throw std::logic_error("could not insert user into map, file descriptor already exists");
 
     return connection_descriptor;
 }
@@ -59,6 +66,7 @@ int Server::handle_server_event(struct epoll_event event)
 // Broadcast a message to all users, except the sender
 void Server::broadcast(std::string message, int sender_descriptor)
 {
+    std::cerr << "Broadcasting message: '" << message << "' from user on fd #" << sender_descriptor << std::endl;
     // Iterate over all users
     for (std::map<int, User>::iterator it = this->users.begin(); it != this->users.end(); ++it)
     {
@@ -79,21 +87,22 @@ bool Server::handle_user_event(struct epoll_event event)
 
     // Check for unknown events
     if (event.events & ~(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLIN | EPOLLOUT))
-        throw std::runtime_error("unknown event on user socket");
+        throw std::domain_error("unknown event on user socket");
 
     // Get user input
     if (event.events & EPOLLIN)
     {
         if (user.read() < 0)
-            throw std::runtime_error("error in reading user socket");
-        std::list<std::string> messages = user.get_messages();
-        for (std::list<std::string>::iterator it = messages.begin(); it != messages.end(); ++it)
-            broadcast(*it, event.data.fd);
+            throw std::runtime_error("error in reading user socket" + std::string(strerror(errno)));
+
+        std::string message;
+        while (user.has_incoming_messages())
+            broadcast(user.get_message(), event.data.fd);
     }
 
     // Send user output
     if (event.events & EPOLLOUT && user.write() < 0)
-        throw std::runtime_error("error in writing user socket");
+        throw std::runtime_error("error in writing user socket" + std::string(strerror(errno)));
 
     // Handle unknown errors
     if (event.events & EPOLLERR)
@@ -103,7 +112,7 @@ bool Server::handle_user_event(struct epoll_event event)
     if (event.events & EPOLLHUP || event.events & EPOLLRDHUP)
     {
         if (!this->users.erase(event.data.fd))
-            throw std::runtime_error("could not erase user from map, file descriptor does not exist");
+            throw std::logic_error("could not erase user from map, file descriptor does not exist");
         std::cerr << "user disconnected" << std::endl;
         return false;
     }
@@ -124,7 +133,7 @@ void Server::run()
         throw std::runtime_error("could not add network socket to epoll instance: " + std::string(strerror(errno)));
 
     // Prepare return vector for epoll_wait. For now, only one event is expected (server socket)
-    int expected_events = 1;
+    unsigned int expected_events = 1;
     std::vector<struct epoll_event> events(expected_events);
 
     // Loop until teardown is requested from signal handler
@@ -133,26 +142,23 @@ void Server::run()
         // Wait for epoll event (can be interrupted by incoming signal)
         int event_count;
         events.resize(expected_events);
-        if ((event_count = epoll_wait(epoll_fd, events.data(), events.size(), -1)) < 0)
+        if ((event_count = epoll_wait(epoll_fd, events.data(), int(events.size()), -1)) < 0)
         {
             // If interrupted by SIGINT, shut down server
             if (errno == EINTR && this->teardown)
-            {
-                std::cerr << "epoll_wait interrupted by SIGINT, shutting down server" << std::endl;
                 break;
-            }
 
             // If interrupted by another signal, continue (ignore the signal)
             else if (errno == EINTR)
                 continue;
 
-            // Otherwise, throw an exception
+            // Raise error on other errors
             else
                 throw std::runtime_error("could not wait for epoll event: " + std::string(strerror(errno)));
         }
 
         // Handle all events
-        for (int i = 0; i < event_count; ++i)
+        for (unsigned int i = 0; i < (unsigned int)event_count; ++i)
         {
             // Handle server event (new connection)
             if (events[i].data.fd == this->fd)
@@ -174,7 +180,7 @@ void Server::run()
         // Rearm all triggers for users with outgoing messages
         for (std::map<int, User>::iterator it = this->users.begin(); it != this->users.end(); ++it)
         {
-            if (it->second.has_messages())
+            if (it->second.has_outgoing_messages())
             {
                 event = (struct epoll_event){.events = EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLET, .data = {.fd = it->first}};
                 if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, it->first, &event) < 0)
@@ -182,6 +188,8 @@ void Server::run()
             }
         }
     }
+
+    std::cerr << "Shutting down server..." << std::endl;
     // End of loop, close epoll instance
     if (close(epoll_fd) < 0)
         throw std::runtime_error("could not close epoll instance: " + std::string(strerror(errno)));

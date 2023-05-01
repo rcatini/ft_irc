@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <csignal>
 #include <cerrno>
+#include <cstring>
 #include <stdint.h>
 #include "server.hpp"
 
@@ -13,6 +14,7 @@ void signal_handler(int signal)
     // Set teardown flag
     if (signal == SIGINT)
         teardown = true;
+    std::cerr << "Caught SIG" << sigabbrev_np(signal) << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -34,16 +36,20 @@ int main(int argc, char *argv[])
     }
 
     // Set up signal handler
-    std::signal(SIGINT, signal_handler);
+    if (std::signal(SIGINT, signal_handler) == SIG_ERR)
+    {
+        std::cerr << "Could not set up signal handler: " << std::string(strerror(errno)) << std::endl;
+        return 3;
+    }
 
     // Run server
     try
     {
-        Server server(teardown, port, argv[2]);
+        Server server(teardown, uint16_t(port), argv[2]);
         server.run();
     }
     catch (std::runtime_error &e)
     {
-        std::cout << "Fatal error: " << e.what() << std::endl;
+        std::cerr << "Fatal error: " << e.what() << std::endl;
     }
 }

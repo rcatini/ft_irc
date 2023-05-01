@@ -1,6 +1,7 @@
 NAME=ircserv
+CXX=c++
 CC=$(CXX)
-CXXFLAGS=-Wall -Wextra -Werror -Wshadow -std=c++98 -g -MMD
+CXXFLAGS=-Wall -Wextra -Werror -Wshadow -Wconversion -Wuninitialized -Wunused -std=c++98 -g -MMD
 SRC=ircserv.cpp server.cpp user.cpp channel.cpp
 OBJ=$(SRC:.cpp=.o)
 DEPENDS=$(SRC:.cpp=.d)

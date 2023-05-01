@@ -10,6 +10,8 @@
 // Create user object from socket file descriptor
 User::User(int socket_fd) : fd(socket_fd)
 {
+    std::cerr << "New user connected on socket " << fd << std::endl;
+    put_message("Welcome to the IRC server!");
 }
 
 // Copy user object (cannibalizing other user)
@@ -34,76 +36,94 @@ User::~User()
     // Close file descriptor
     if (close(fd) < 0)
         std::cerr << "could not close user socket: " << std::string(strerror(errno)) << std::endl;
+
+    std::cerr << "User on socket " << fd << " disconnected" << std::endl;
 }
 
-// Check if user has messages to send
-bool User::has_messages()
+// Check if user has outgoing messages
+bool User::has_outgoing_messages()
 {
-    return outgoing_buffer.length() > 0;
+    return outgoing_buffer.find(LINE_DELIM) != std::string::npos;
 }
 
-// Get messages from the buffer, and returns them as a list of strings
-std::list<std::string> User::get_messages()
+// Extract message from incoming buffer
+std::string User::get_message()
 {
-    // Return empty list if there are no messages
-    std::list<std::string> messages;
+    // Find end of line
+    std::size_t line_end = incoming_buffer.find(LINE_DELIM);
 
-    // Split incoming buffer into messages
-    while (incoming_buffer.length() > 0)
+    // If no end of line, the buffer does not contain a complete message
+    if (line_end == std::string::npos)
+        throw std::logic_error("No complete message in buffer");
+
+    // If line is empty, read next message
+    if (line_end == 0)
     {
-        // Find end of line
-        std::size_t line_end = incoming_buffer.find(LINE_DELIM);
-
-        // If no end of line, the buffer does not contain a complete message
-        if (line_end == std::string::npos)
-            break;
-
-        // If line is empty, ignore it
-        if (line_end == 0)
-        {
-            incoming_buffer.erase(0, strlen(LINE_DELIM));
-            continue;
-        }
-
-        // Extract message from buffer
-        std::string message = incoming_buffer.substr(0, line_end);
-        incoming_buffer.erase(0, line_end + strlen(LINE_DELIM));
-
-        // Check message length
-        if (message.length() > MAX_MSG_LEN - strlen(LINE_DELIM))
-            throw std::runtime_error("Message too long");
-
-        // Add message to list
-        messages.push_back(message);
+        incoming_buffer.erase(0, strlen(LINE_DELIM));
+        return get_message();
     }
 
-    // Check if the unterminated message is too long
-    if (incoming_buffer.length() > MAX_MSG_LEN)
-        throw std::runtime_error("Message too long");
+    // Extract message from buffer
+    std::string message = incoming_buffer.substr(0, line_end);
+    incoming_buffer.erase(0, line_end + strlen(LINE_DELIM));
 
-    return messages;
-}
-
-// Put message in outgoing buffer
-void User::put_message(std::string message)
-{
     // Check message length
     if (message.length() > MAX_MSG_LEN - strlen(LINE_DELIM))
-        throw std::runtime_error("Message too long");
+        throw std::length_error("Message too long");
+
+    std::cerr << "Message extracted from incoming buffer (client #" << fd << "): " << message << std::endl;
+
+    return message;
+}
+
+// Check if user has outgoing messages
+bool User::has_incoming_messages()
+{
+
+    // Find end of line
+    std::size_t line_end = incoming_buffer.find(LINE_DELIM);
+
+    // If no end of line, the buffer does not contain a complete message
+    if (line_end == std::string::npos)
+        return false;
+
+    // If line is empty, look for next message
+    if (line_end == 0)
+    {
+        incoming_buffer.erase(0, strlen(LINE_DELIM));
+        return has_incoming_messages();
+    }
+
+    // If line is not empty, there is a complete message in the buffer
+    return true;
+}
+
+// Append message to outgoing buffer
+bool User::put_message(std::string message)
+{
+    if (message.empty())
+        return false;
+
+    // Check message length
+    if (message.length() > MAX_MSG_LEN - strlen(LINE_DELIM))
+        throw std::length_error("Message too long");
 
     // Add message to outgoing buffer (with line delimiter)
-    outgoing_buffer.append(message);
-    outgoing_buffer.append(LINE_DELIM);
+    outgoing_buffer.append(message + LINE_DELIM);
+
+    std::cerr << "Message added to outgoing buffer (client #" << fd << "): " << message << std::endl;
+
+    return true;
 }
 
 // Consumes data from socket and appends it to incoming buffer
-int User::read()
+ssize_t User::read()
 {
     // Read data from socket
     char buf[MAX_MSG_LEN];
-    int bytes_read;
+    ssize_t bytes_read;
     while ((bytes_read = recv(fd, buf, MAX_MSG_LEN, MSG_DONTWAIT)) > 0)
-        incoming_buffer.append(buf, bytes_read);
+        incoming_buffer.append(buf, (unsigned long)bytes_read);
 
     // Return 0 if operation would block (try again later)
     if (bytes_read < 0)
@@ -117,26 +137,23 @@ int User::read()
 }
 
 // Writes messages from outgoing buffer to socket, returns written bytes
-int User::write()
+ssize_t User::write()
 {
-    int bytes_sent = 0;
+    ssize_t bytes_sent = 0;
 
     // Send data from outgoing buffer
-    while (outgoing_buffer.length() > 0)
+    while (bytes_sent >= 0 && outgoing_buffer.length() > 0)
     {
         // Send all data from outgoing buffer
         bytes_sent = send(fd, outgoing_buffer.c_str(), outgoing_buffer.length(), MSG_DONTWAIT);
 
-        // Return 0 if operation would block (try again later)
-        if (bytes_sent < 0)
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return 0;
-            throw std::runtime_error("Error sending message" + std::string(strerror(errno)));
-        }
+        // Delete written data from outgoing buffer
+        if (bytes_sent > 0)
+            outgoing_buffer.erase(0, (unsigned long)bytes_sent);
 
-        // Remove sent data from outgoing buffer
-        outgoing_buffer.erase(0, bytes_sent);
+        // Return 0 if operation would block (try again later)
+        else if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return 0;
     }
 
     return bytes_sent;

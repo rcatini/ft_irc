@@ -8,7 +8,7 @@
 
 class Server
 {
-    int port;                                                        // Server port
+    uint16_t port;                                                   // Server port
     std::string password;                                            // Server password
     int fd;                                                          // Server file descriptor for socket
     bool &teardown;                                                  // Reference to teardown flag (set by signal handler)
@@ -21,9 +21,9 @@ class Server
     void broadcast(std::string message, int sender_descriptor = -1); // Broadcast a message to all users, except the sender
 
 public:
-    Server(bool &shutdown_ref, int port = 6667, std::string password = ""); // Constructor (starts listening on port)
-    ~Server();                                                              // Destructor (closes socket)
-    void run();                                                             // Main server loop
+    Server(bool &shutdown_ref, uint16_t port = 6667, std::string password = ""); // Constructor (starts listening on port)
+    ~Server();                                                                   // Destructor (closes socket)
+    void run();                                                                  // Main server loop
 };
 
 #endif

@@ -16,13 +16,12 @@ public:
     User(int fd);                          // Constructor
     ~User();                               // Destructor
     User(const User &other);               // Copy constructor
-    int read();                            // Read data from socket
-    int write();                           // Write data to socket
-    std::list<std::string> get_messages(); // Parse incoming buffer into messages
-    void put_message(std::string message); // Put message in outgoing buffer
-    bool has_messages();                   // Check if there are messages in outgoing buffer
-    void connect(int *fd);                 // Connect to socket
-    void quit();                           // Quit connection
+    ssize_t read();                        // Read data from socket
+    ssize_t write();                       // Write data to socket
+    bool put_message(std::string message); // Put message in outgoing buffer
+    std::string get_message();             // Extract message from incoming buffer
+    bool has_incoming_messages();          // Check if there are messages in incoming buffer
+    bool has_outgoing_messages();          // Check if there are messages in outgoing buffer
 };
 
 #endif
