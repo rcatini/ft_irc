@@ -106,7 +106,7 @@ ssize_t User::read()
         // Append data to incoming buffer
         incoming_buffer.append(buf, (unsigned long)bytes_read);
 
-        // If the string has grown over the maximum message length, parse it
+        // If the string has grown over the maximum message length, parse early
         if (incoming_buffer.length() > MAX_MSG_LEN)
             split_buffer(incoming_buffer, incoming_messages);
     }
@@ -120,7 +120,7 @@ ssize_t User::read()
             throw std::runtime_error("Error reading message" + std::string(strerror(errno)));
     }
 
-    // Parse the rest of the incoming data
+    // Parse the incoming data
     split_buffer(incoming_buffer, incoming_messages);
 
     return bytes_read;
