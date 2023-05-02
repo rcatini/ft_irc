@@ -95,8 +95,8 @@ bool Server::handle_user_event(struct epoll_event event)
             throw std::runtime_error("error in reading user socket" + std::string(strerror(errno)));
 
         std::string message;
-        while (user.has_incoming_messages())
-            broadcast(user.get_message(), event.data.fd);
+        while ((message = user.get_message()).length() > 0)
+            broadcast(message, event.data.fd);
     }
 
     // Send user output

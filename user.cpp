@@ -46,17 +46,11 @@ bool User::has_outgoing_messages()
 std::string User::get_message()
 {
     if (incoming_messages.empty())
-        throw std::logic_error("No messages to get");
+        return "";
 
     std::string message = incoming_messages.front();
     incoming_messages.pop_front();
     return message;
-}
-
-// Check if user has outgoing messages
-bool User::has_incoming_messages()
-{
-    return incoming_messages.size() > 0;
 }
 
 // Append message to outgoing buffer
@@ -117,16 +111,17 @@ ssize_t User::read()
             split_buffer(incoming_buffer, incoming_messages);
     }
 
-    // Parse the rest of the incoming data
-    split_buffer(incoming_buffer, incoming_messages);
-
     // Return 0 if operation would block (try again later)
     if (bytes_read < 0)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return 0;
-        throw std::runtime_error("Error reading message" + std::string(strerror(errno)));
+            bytes_read = 0;
+        else
+            throw std::runtime_error("Error reading message" + std::string(strerror(errno)));
     }
+
+    // Parse the rest of the incoming data
+    split_buffer(incoming_buffer, incoming_messages);
 
     return bytes_read;
 }

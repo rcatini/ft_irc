@@ -16,12 +16,11 @@ class User
 public:
     User(int fd);                          // Constructor
     ~User();                               // Destructor
-    User(const User &other);               // Copy constructor
-    ssize_t read();                        // Read data from socket
-    ssize_t write();                       // Write data to socket
+    User(const User &other);               // Copy constructor with move semantics
+    ssize_t read();                        // Read data from socket into incoming buffer
+    ssize_t write();                       // Write data to socket from outgoing buffer
     bool put_message(std::string message); // Put message in outgoing buffer
     std::string get_message();             // Extract message from incoming buffer
-    bool has_incoming_messages();          // Check if there are messages in incoming buffer
     bool has_outgoing_messages();          // Check if there are messages in outgoing buffer
 };
 
