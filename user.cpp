@@ -10,8 +10,6 @@
 // Create user object from socket file descriptor
 User::User(int socket_fd) : fd(socket_fd)
 {
-    std::cerr << "New user connected on socket " << fd << std::endl;
-    put_message("Welcome to the IRC server!");
 }
 
 // Copy user object (cannibalizing other user)
@@ -36,8 +34,6 @@ User::~User()
     // Close file descriptor
     if (close(fd) < 0)
         std::cerr << "could not close user socket: " << std::string(strerror(errno)) << std::endl;
-
-    std::cerr << "User on socket " << fd << " disconnected" << std::endl;
 }
 
 // Check if user has outgoing messages
@@ -74,8 +70,6 @@ bool User::put_message(std::string message)
         throw std::length_error("Message too long");
 
     outgoing_buffer.append(message + LINE_DELIM);
-
-    std::cerr << "Message added to outgoing (user #" << fd << "): " << message << std::endl;
 
     return true;
 }

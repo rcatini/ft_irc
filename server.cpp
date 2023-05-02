@@ -66,7 +66,6 @@ int Server::handle_server_event(struct epoll_event event)
 // Broadcast a message to all users, except the sender
 void Server::broadcast(std::string message, int sender_descriptor)
 {
-    std::cerr << "Broadcasting message: '" << message << "' from user on fd #" << sender_descriptor << std::endl;
     // Iterate over all users
     for (std::map<int, User>::iterator it = this->users.begin(); it != this->users.end(); ++it)
     {
@@ -113,7 +112,6 @@ bool Server::handle_user_event(struct epoll_event event)
     {
         if (!this->users.erase(event.data.fd))
             throw std::logic_error("could not erase user from map, file descriptor does not exist");
-        std::cerr << "user disconnected" << std::endl;
         return false;
     }
 
