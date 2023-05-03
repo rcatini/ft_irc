@@ -14,7 +14,7 @@ void signal_handler(int signal)
     // Set teardown flag
     if (signal == SIGINT)
         teardown = true;
-    std::cerr << "Caught SIG" << sigabbrev_np(signal) << std::endl;
+    std::cerr << "Caught signal " << signal << std::endl;
 }
 
 int main(int argc, char *argv[])
