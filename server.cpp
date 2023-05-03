@@ -6,7 +6,6 @@
 #include <cstring>
 #include <vector>
 #include <sys/socket.h>
-#include <sys/epoll.h>
 #include <unistd.h>
 
 // Create server object, starting listening on port for TCP connections

@@ -8,12 +8,12 @@
 #include "user.hpp"
 
 // Create user object from socket file descriptor
-User::User(int socket_fd) : fd(socket_fd)
+User::User(int socket_fd) : fd(socket_fd), registered(false)
 {
 }
 
 // Copy user object (cannibalizing other user)
-User::User(const User &other) : fd(other.fd), incoming_buffer(other.incoming_buffer), outgoing_buffer(other.outgoing_buffer)
+User::User(const User &other) : fd(other.fd), registered(other.registered), incoming_buffer(other.incoming_buffer), outgoing_buffer(other.outgoing_buffer), incoming_messages(other.incoming_messages)
 {
     // Cannibalizes other user (steals file descriptor)
     int &other_fd = const_cast<int &>(const_cast<User &>(other).fd);

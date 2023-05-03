@@ -9,6 +9,7 @@
 class User
 {
     int fd;                                   // File descriptor for socket
+    bool registered;                          // Flag for user registration
     std::string incoming_buffer;              // Buffer for incoming messages
     std::string outgoing_buffer;              // Buffer for outgoing messages
     std::list<std::string> incoming_messages; // List of incoming messages

@@ -2,6 +2,7 @@
 #define SERVER_HPP
 #include <string>
 #include <netinet/in.h>
+#include <sys/epoll.h>
 #include <map>
 #include "user.hpp"
 #include "channel.hpp"
