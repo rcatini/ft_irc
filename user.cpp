@@ -60,37 +60,68 @@ bool User::put_message(std::string message)
         return false;
 
     // Check message length
-    if (message.length() > MAX_MSG_LEN - strlen(LINE_DELIM))
+    if (message.length() > MAX_MSG_LEN - 2)
         throw std::length_error("Message too long");
 
-    outgoing_buffer.append(message + LINE_DELIM);
+    outgoing_buffer.append(message + "\r\n");
 
     return true;
+}
+
+// Gets the first non-empty line from the buffer
+std::string getline(std::string &buffer)
+{
+    size_t delim_len = 0;
+
+    // Find first line delimiter
+    size_t pos = buffer.find("\r\n");
+    if (pos != std::string::npos)
+    {
+        delim_len++;
+        if (buffer.size() > pos + 1 && buffer[pos + 1] == '\n')
+            delim_len++;
+    }
+    else
+    {
+        pos = buffer.find("\n");
+        if (pos != std::string::npos)
+            delim_len++;
+    }
+
+    // If no line delimiter was found, return empty string
+    if (pos == std::string::npos)
+        return "";
+
+    // Extract line from buffer
+    std::string line = buffer.substr(0, pos);
+
+    // Remove line from buffer
+    buffer.erase(0, pos + delim_len);
+
+    // If the line is empty, return the next one
+    if (line.empty())
+        return getline(buffer);
+
+    return line;
 }
 
 // Parse incoming buffer and put messages in incoming_messages
 void split_buffer(std::string &buffer, std::list<std::string> &messages)
 {
-    size_t line_delim_pos;
-
-    // While there are line delimiters in the incoming buffer
-    while ((line_delim_pos = buffer.find(LINE_DELIM)) != std::string::npos)
+    // While there is a line in the buffer
+    std::string line;
+    while ((line = getline(buffer)) != "")
     {
-        // If line delimiter is at the beginning of the string, ignore it
-        if (line_delim_pos == 0)
-        {
-            buffer.erase(0, strlen(LINE_DELIM));
-            continue;
-        }
+        // If line is too long, throw exception
+        if (line.length() > MAX_MSG_LEN - 2)
+            throw std::length_error("Message too long");
 
-        // Extract message from incoming buffer
-        std::string message = buffer.substr(0, line_delim_pos);
-        buffer.erase(0, line_delim_pos + strlen(LINE_DELIM));
-        messages.push_back(message);
+        // Append line to incoming messages
+        messages.push_back(line);
     }
 
     // Check if the remaining string is too long
-    if (buffer.length() > MAX_MSG_LEN)
+    if (buffer.length() > MAX_MSG_LEN - 2)
         throw std::length_error("Message too long");
 }
 
