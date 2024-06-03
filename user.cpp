@@ -1,16 +1,16 @@
 #include "user.hpp"
 #include <string>
+#include <iostream>
 
 void User::receive_data(std::string const &data)
 {
-	std::string incoming_stuff = incoming_buffer + data;
+	incoming_buffer += data;
 	size_t eol_pos;
 
-	if ((eol_pos = incoming_stuff.find(EOL)) != std::string::npos)
+	while ((eol_pos = incoming_buffer.find(EOL)) != std::string::npos)
 	{
-		incoming_messages.push(incoming_stuff.substr(0, eol_pos));
-		incoming_buffer = incoming_stuff.substr(eol_pos + 2);
+		incoming_messages.push(incoming_buffer.substr(0, eol_pos));
+		incoming_buffer = incoming_buffer.substr(eol_pos + 2);
+		std::cout << "Received message: " << incoming_messages.back() << std::endl;
 	}
-	else
-		incoming_buffer = incoming_stuff;
 }
