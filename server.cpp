@@ -81,7 +81,7 @@ void Server::run()
 				int user_fd;
 				if ((user_fd = accept(this->fd, (struct sockaddr *)&user_address, &user_address_len)) == -1)
 					throw std::runtime_error("Could not accept connection: " + std::string(strerror(errno)));
-				users.insert(std::make_pair(user_fd, User(user_fd, epoll_fd)));
+				fd_user.insert(std::make_pair(user_fd, User(user_fd, user_address, epoll_fd)));
 				events.resize(events.size() + 1);
 			}
 
@@ -92,6 +92,8 @@ void Server::run()
 				std::getline(std::cin, input);
 				if (input == "exit" || input == "quit")
 					signal = SIGINT;
+				else if (input == "list")
+					list_fd_user();
 				else
 					broadcast(input);
 
@@ -101,16 +103,16 @@ void Server::run()
 			}
 
 			// find the epoll fd in the users map
-			if (users.find(event.data.fd) != users.end())
+			if (fd_user.find(event.data.fd) != fd_user.end())
 			{
 				// if user socket has a read event, receive data from it
 				if (event.events & EPOLLIN)
 				{
-					if (users.at(event.data.fd).receive_data() == 0)
+					if (fd_user.at(event.data.fd).receive_data() == 0)
 					{
 						if (close(event.data.fd) == -1)
 							throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
-						users.erase(event.data.fd);
+						fd_user.erase(event.data.fd);
 						events.resize(events.size() - 1);
 					}
 				}
@@ -118,11 +120,11 @@ void Server::run()
 				// if user socket has a write event, send data to it
 				if (event.events & EPOLLOUT)
 				{
-					if (users.at(event.data.fd).send_data() == 0)
+					if (fd_user.at(event.data.fd).send_data() == 0)
 					{
 						if (close(event.data.fd) == -1)
 							throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
-						users.erase(event.data.fd);
+						fd_user.erase(event.data.fd);
 						events.resize(events.size() - 1);
 					}
 				}
@@ -131,7 +133,7 @@ void Server::run()
 	}
 
 	// close all user sockets
-	for (std::map<int, User>::iterator it = users.begin(); it != users.end(); ++it)
+	for (std::map<int, User>::iterator it = fd_user.begin(); it != fd_user.end(); ++it)
 		if (close(it->first) == -1)
 			throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
 
@@ -142,6 +144,12 @@ void Server::run()
 
 void Server::broadcast(const std::string &message)
 {
-	for (std::map<int, User>::iterator it = users.begin(); it != users.end(); ++it)
+	for (std::map<int, User>::iterator it = fd_user.begin(); it != fd_user.end(); ++it)
 		it->second.queue_message(message);
+}
+
+void Server::list_fd_user()
+{
+	for (std::map<int, User>::iterator it = fd_user.begin(); it != fd_user.end(); ++it)
+		std::cout << it->first << "\t" << it->second.get_address() << std::endl;
 }

@@ -15,8 +15,9 @@ class Server
 	int fd;
 	struct sockaddr_in address;
 	volatile sig_atomic_t &signal;
-	std::map<int, User> users;
+	std::map<int, User> fd_user;
 	void broadcast(const std::string &message);
+	void list_fd_user();
 
 public:
 	Server(unsigned short port, const std::string &password,
