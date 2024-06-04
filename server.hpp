@@ -8,9 +8,11 @@
 #include <netinet/in.h>
 #include "user.hpp"
 
+class User;
+
 class Server
 {
-	short port;
+	unsigned short port;
 	std::string password;
 	int fd;
 	struct sockaddr_in address;
@@ -24,4 +26,5 @@ public:
 		   volatile sig_atomic_t &signal);
 	~Server();
 	void run();
+	bool verify_password(const std::string &pass) const;
 };

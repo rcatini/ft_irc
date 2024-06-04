@@ -9,8 +9,8 @@
 #include <iostream>
 #include <arpa/inet.h>
 
-User::User(int user_fd, struct sockaddr_in user_address, int main_epoll_fd)
-	: fd(user_fd), address(user_address), epoll_fd(main_epoll_fd)
+User::User(Server &s, int user_fd, struct sockaddr_in user_address, int main_epoll_fd)
+	: server(s), fd(user_fd), address(user_address), epoll_fd(main_epoll_fd), authenticated(false)
 {
 	struct epoll_event event = {.events = EPOLLIN | EPOLLOUT, .data = {.fd = user_fd}};
 	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event) == -1)
@@ -26,7 +26,7 @@ ssize_t User::receive_data()
 		throw std::runtime_error("Could not read from user socket: " + std::string(strerror(errno)));
 	else if (bytes_read == 0)
 		return 0;
-	data.resize(bytes_read);
+	data.resize((unsigned long)bytes_read);
 	incoming_buffer += data;
 
 	// process the incoming buffer splitting messages by EOL
@@ -80,7 +80,7 @@ ssize_t User::send_data()
 	if ((bytes_sent = send(fd, outgoing_buffer.c_str(), outgoing_buffer.size(), MSG_DONTWAIT)) == -1)
 		throw std::runtime_error("Could not write to user socket: " + std::string(strerror(errno)));
 	else
-		outgoing_buffer.erase(0, bytes_sent);
+		outgoing_buffer.erase(0, (unsigned long)bytes_sent);
 
 	return bytes_sent;
 }
@@ -101,4 +101,18 @@ std::string const User::get_address()
 	std::stringstream ss;
 	ss << inet_ntoa(address.sin_addr) << ":" << ntohs(address.sin_port);
 	return ss.str();
+}
+
+bool User::authenticate(const std::string &password)
+{
+	if (authenticated)
+		throw std::runtime_error("User already authenticated");
+
+	if (server.verify_password(password))
+	{
+		authenticated = true;
+		return true;
+	}
+
+	return false;
 }

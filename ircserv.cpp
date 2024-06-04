@@ -25,6 +25,10 @@ unsigned short check_args_and_extract_port(int argc, char *argv[])
 	if (!(iss >> port) || (port <= 0) || (port > USHRT_MAX) || iss.peek() != EOF)
 		throw std::runtime_error("Invalid port: " + std::string(argv[1]));
 
+	// check if the password is not empty
+	if (std::string(argv[2]).empty())
+		throw std::runtime_error("Password cannot be empty");
+
 	return (unsigned short)port;
 }
 

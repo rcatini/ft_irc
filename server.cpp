@@ -71,7 +71,7 @@ void Server::run()
 		// check all events
 		for (int i = 0; i < event_count && !signal; ++i)
 		{
-			struct epoll_event event = events[i];
+			struct epoll_event event = events[(unsigned long)i];
 
 			// if server socket has a read event, accept the connection
 			if (event.data.fd == this->fd)
@@ -81,7 +81,7 @@ void Server::run()
 				int user_fd;
 				if ((user_fd = accept(this->fd, (struct sockaddr *)&user_address, &user_address_len)) == -1)
 					throw std::runtime_error("Could not accept connection: " + std::string(strerror(errno)));
-				fd_user.insert(std::make_pair(user_fd, User(user_fd, user_address, epoll_fd)));
+				fd_user.insert(std::make_pair(user_fd, User(*this, user_fd, user_address, epoll_fd)));
 				events.resize(events.size() + 1);
 			}
 
@@ -152,4 +152,9 @@ void Server::list_fd_user()
 {
 	for (std::map<int, User>::iterator it = fd_user.begin(); it != fd_user.end(); ++it)
 		std::cout << it->first << "\t" << it->second.get_address() << std::endl;
+}
+
+bool Server::verify_password(const std::string &pass) const
+{
+	return pass == password;
 }

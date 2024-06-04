@@ -9,18 +9,24 @@
 #include <sstream>
 #include <sys/epoll.h>
 #include <netinet/in.h>
+#include "server.hpp"
+
+class Server;
 
 class User
 {
+	Server &server;
 	int fd;
 	struct sockaddr_in address;
 	int epoll_fd;
-	std::string incoming_buffer;
-	std::string outgoing_buffer;
+	bool authenticated;
+	std::string nickname, username;
+	std::string incoming_buffer, outgoing_buffer;
 	std::queue<std::string> incoming_messages;
+	bool authenticate(const std::string &password);
 
 public:
-	User(int user_fd, struct sockaddr_in user_address, int epoll_fd);
+	User(Server &s, int user_fd, struct sockaddr_in user_address, int epoll_fd);
 	ssize_t receive_data();
 	ssize_t send_data();
 	void queue_message(const std::string &message);
