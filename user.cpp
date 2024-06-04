@@ -25,19 +25,16 @@ ssize_t User::receive_data()
 	else
 		data.resize(bytes_read);
 
-	std::string incoming_stuff = incoming_buffer + data;
+	incoming_buffer += data;
 	size_t eol_pos;
 
-	if ((eol_pos = incoming_stuff.find(EOL)) != std::string::npos)
+	while ((eol_pos = incoming_buffer.find(EOL)) != std::string::npos)
 	{
 		if (eol_pos != 0)
-			incoming_messages.push(incoming_stuff.substr(0, eol_pos));
-		incoming_buffer = incoming_stuff.substr(eol_pos + 2);
-		std::cout << "Incoming message from fd#" << current_event.data.fd << ": <<<" << incoming_messages.front() << ">>>" << std::endl;
+			incoming_messages.push(incoming_buffer.substr(0, eol_pos));
+		incoming_buffer = incoming_buffer.substr(eol_pos + 2);
+		std::cout << "Incoming message from fd#" << current_event.data.fd << ": <<<" << incoming_messages.back() << ">>>" << std::endl;
 	}
-	else
-		incoming_buffer = incoming_stuff;
-
 	return bytes_read;
 }
 

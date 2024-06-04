@@ -115,7 +115,6 @@ void Server::run()
 			// if user socket has a write event, send data to it
 			else if (event.events & EPOLLOUT)
 			{
-				std::cout << "got EPOLLOUT event on fd " << event.data.fd << "\n";
 				if (users.at(event.data.fd).send_data() == 0)
 				{
 					if (close(event.data.fd) == -1)
