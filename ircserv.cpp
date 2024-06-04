@@ -33,15 +33,27 @@ int main(int argc, char *argv[])
 	// register the signal handler for SIGINT
 	signal(SIGINT, signal_handler);
 
+	// check the program arguments and extract the port
+	unsigned short port;
 	try
 	{
-		unsigned short port = check_args_and_extract_port(argc, argv);
+		port = check_args_and_extract_port(argc, argv);
+	}
+	catch (const std::exception &e)
+	{
+		std::cerr << e.what() << std::endl;
+		return 1;
+	}
+
+	// create the server and run it
+	try
+	{
 		Server server(port, argv[2], signal_status);
 		server.run();
 	}
 	catch (const std::exception &e)
 	{
 		std::cerr << "Exception caught in main: " << e.what() << std::endl;
-		return 1;
+		return 2;
 	}
 }
