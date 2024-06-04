@@ -10,14 +10,14 @@
 
 class User
 {
-	struct epoll_event current_event;
+	int fd;
 	int epoll_fd;
 	std::string incoming_buffer;
 	std::string outgoing_buffer;
 	std::queue<std::string> incoming_messages;
 
 public:
-	User(struct epoll_event event, int epoll_fd);
+	User(int user_fd, int epoll_fd);
 	ssize_t receive_data();
 	ssize_t send_data();
 	void queue_message(const std::string &message);

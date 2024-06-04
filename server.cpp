@@ -73,6 +73,7 @@ void Server::run()
 		{
 			struct epoll_event event = events[i];
 
+			// if server socket has a read event, accept the connection
 			if (event.data.fd == this->fd)
 			{
 				struct sockaddr_in user_address;
@@ -80,8 +81,7 @@ void Server::run()
 				int user_fd;
 				if ((user_fd = accept(this->fd, (struct sockaddr *)&user_address, &user_address_len)) == -1)
 					throw std::runtime_error("Could not accept connection: " + std::string(strerror(errno)));
-				struct epoll_event intial_event = {.events = EPOLLIN | EPOLLOUT, .data = {.fd = user_fd}};
-				users.insert(std::make_pair(user_fd, User(intial_event, epoll_fd)));
+				users.insert(std::make_pair(user_fd, User(user_fd, epoll_fd)));
 				events.resize(events.size() + 1);
 			}
 
@@ -100,27 +100,31 @@ void Server::run()
 					throw std::runtime_error("Could not remove stdin from epoll: " + std::string(strerror(errno)));
 			}
 
-			// if user socket has a read event, receive data from it
-			else if (event.events & EPOLLIN)
+			// find the epoll fd in the users map
+			if (users.find(event.data.fd) != users.end())
 			{
-				if (users.at(event.data.fd).receive_data() == 0)
+				// if user socket has a read event, receive data from it
+				if (event.events & EPOLLIN)
 				{
-					if (close(event.data.fd) == -1)
-						throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
-					users.erase(event.data.fd);
-					events.resize(events.size() - 1);
+					if (users.at(event.data.fd).receive_data() == 0)
+					{
+						if (close(event.data.fd) == -1)
+							throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
+						users.erase(event.data.fd);
+						events.resize(events.size() - 1);
+					}
 				}
-			}
 
-			// if user socket has a write event, send data to it
-			else if (event.events & EPOLLOUT)
-			{
-				if (users.at(event.data.fd).send_data() == 0)
+				// if user socket has a write event, send data to it
+				if (event.events & EPOLLOUT)
 				{
-					if (close(event.data.fd) == -1)
-						throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
-					users.erase(event.data.fd);
-					events.resize(events.size() - 1);
+					if (users.at(event.data.fd).send_data() == 0)
+					{
+						if (close(event.data.fd) == -1)
+							throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
+						users.erase(event.data.fd);
+						events.resize(events.size() - 1);
+					}
 				}
 			}
 		}
