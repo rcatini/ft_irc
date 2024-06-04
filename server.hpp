@@ -1,7 +1,6 @@
 #pragma once
 
 #define CONNECTION_QUEUE_SIZE 10
-#define MAX_MESSAGE_SIZE 512
 
 #include <string>
 #include <map>
@@ -17,7 +16,7 @@ class Server
 	struct sockaddr_in address;
 	volatile sig_atomic_t &signal;
 	std::map<int, User> users;
-	int accept_connection();
+	void broadcast(const std::string &message);
 
 public:
 	Server(unsigned short port, const std::string &password,

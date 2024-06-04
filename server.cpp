@@ -8,89 +8,137 @@
 #include <unistd.h>
 #include <map>
 #include <vector>
+#include <iostream>
 
 Server::Server(unsigned short p, const std::string &pass, volatile sig_atomic_t &sigstatus)
 	: port(p), password(pass), signal(sigstatus)
 {
+	// socket creation (normally fd==3)
 	if ((this->fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		throw std::runtime_error("Could not create socket: " + std::string(strerror(errno)));
 
-	this->address = (struct sockaddr_in){AF_INET, htons(port), {INADDR_ANY}, {}};
+	// enable port reuse
+	int enable = 1;
+	if (setsockopt(this->fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) == -1)
+		throw std::runtime_error("Could not set socket options: " + std::string(strerror(errno)));
 
+	// bind socket to port
+	this->address = (struct sockaddr_in){AF_INET, htons(port), {INADDR_ANY}, {}};
 	if (bind(this->fd, (struct sockaddr *)&this->address, sizeof(this->address)) == -1)
 		throw std::runtime_error("Could not bind socket: " + std::string(strerror(errno)));
 
+	// listen on socket
 	if (listen(this->fd, CONNECTION_QUEUE_SIZE) == -1)
 		throw std::runtime_error("Could not listen on socket: " + std::string(strerror(errno)));
 }
 
 Server::~Server()
 {
+	// close server socket
 	if (close(this->fd) == -1)
 		throw std::runtime_error("Could not close server socket: " + std::string(strerror(errno)));
-	for (std::map<int, User>::iterator it = users.begin(); it != users.end(); ++it)
-		if (close(it->first) == -1)
-			throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
 }
 
 void Server::run()
 {
+	// epoll instance creation (normally epoll_fd==4)
 	int epoll_fd;
-
 	if ((epoll_fd = epoll_create(1)) == -1)
 		throw std::runtime_error("Could not create epoll instance: " + std::string(strerror(errno)));
 
+	// add server socket to epoll (wait for incoming connections)
 	struct epoll_event server_event = {.events = EPOLLIN, .data = {.fd = this->fd}};
 	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, this->fd, &server_event) == -1)
 		throw std::runtime_error("Could not add server socket to epoll: " + std::string(strerror(errno)));
 
-	struct epoll_event event;
+	// add server stdin to epoll (wait for user input)
+	struct epoll_event stdin_event = {.events = EPOLLIN, .data = {.fd = STDIN_FILENO}};
+	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDIN_FILENO, &stdin_event) == -1)
+		throw std::runtime_error("Could not add stdin to epoll: " + std::string(strerror(errno)));
 
+	// event structure for the epoll results (space for 2 events: server socket and stdin)
+	std::vector<struct epoll_event> events(2);
+
+	// wait for incoming connections and user data
 	while (!signal)
 	{
-		int event_count = epoll_wait(epoll_fd, &event, 1, -1);
+		int event_count = epoll_wait(epoll_fd, &events.front(), (int)events.size(), -1);
+
+		// if wait was interrupted (e.g. by a signal), retry
 		if (event_count <= 0)
 			continue;
-		else if (event.data.fd == this->fd)
+
+		// check all events
+		for (int i = 0; i < event_count && !signal; ++i)
 		{
-			int user_fd = accept_connection();
-			struct epoll_event user_event = {.events = EPOLLIN, .data = {.fd = user_fd}};
-			if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, user_fd, &user_event) == -1)
-				throw std::runtime_error("Could not add user socket to epoll: " + std::string(strerror(errno)));
-		}
-		else if (event.events & EPOLLIN)
-		{
-			char buffer[MAX_MESSAGE_SIZE];
-			ssize_t bytes_read;
-			if ((bytes_read = recv(event.data.fd, buffer, sizeof(buffer), MSG_DONTWAIT)) == -1)
-				throw std::runtime_error("Could not read from user socket: " + std::string(strerror(errno)));
-			else if (bytes_read == 0)
+			struct epoll_event event = events[i];
+
+			if (event.data.fd == this->fd)
 			{
-				if (close(event.data.fd) == -1)
-					throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
-				users.erase(event.data.fd);
+				struct sockaddr_in user_address;
+				socklen_t user_address_len = sizeof(user_address);
+				int user_fd;
+				if ((user_fd = accept(this->fd, (struct sockaddr *)&user_address, &user_address_len)) == -1)
+					throw std::runtime_error("Could not accept connection: " + std::string(strerror(errno)));
+				struct epoll_event intial_event = {.events = EPOLLIN | EPOLLOUT, .data = {.fd = user_fd}};
+				users.insert(std::make_pair(user_fd, User(intial_event, epoll_fd)));
+				events.resize(events.size() + 1);
 			}
-			else
+
+			// if stdin has a read event, read the input (server-side command)
+			else if (event.data.fd == STDIN_FILENO)
 			{
-				std::string data(buffer, bytes_read);
-				users[event.data.fd].receive_data(data);
+				std::string input;
+				std::getline(std::cin, input);
+				if (input == "exit" || input == "quit")
+					signal = SIGINT;
+				else
+					broadcast(input);
+
+				// remove stdin from epoll events
+				if (std::cin.eof() && epoll_ctl(epoll_fd, EPOLL_CTL_DEL, STDIN_FILENO, NULL) == -1)
+					throw std::runtime_error("Could not remove stdin from epoll: " + std::string(strerror(errno)));
+			}
+
+			// if user socket has a read event, receive data from it
+			else if (event.events & EPOLLIN)
+			{
+				if (users.at(event.data.fd).receive_data() == 0)
+				{
+					if (close(event.data.fd) == -1)
+						throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
+					users.erase(event.data.fd);
+					events.resize(events.size() - 1);
+				}
+			}
+
+			// if user socket has a write event, send data to it
+			else if (event.events & EPOLLOUT)
+			{
+				std::cout << "got EPOLLOUT event on fd " << event.data.fd << "\n";
+				if (users.at(event.data.fd).send_data() == 0)
+				{
+					if (close(event.data.fd) == -1)
+						throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
+					users.erase(event.data.fd);
+					events.resize(events.size() - 1);
+				}
 			}
 		}
-		else
-			throw std::runtime_error("Unexpected event on user socket");
 	}
+
+	// close all user sockets
+	for (std::map<int, User>::iterator it = users.begin(); it != users.end(); ++it)
+		if (close(it->first) == -1)
+			throw std::runtime_error("Could not close user socket: " + std::string(strerror(errno)));
+
+	// exit from the loop, close epoll instance
 	if (close(epoll_fd) == -1)
 		throw std::runtime_error("Could not close epoll instance: " + std::string(strerror(errno)));
 }
 
-int Server::accept_connection()
+void Server::broadcast(const std::string &message)
 {
-	struct sockaddr_in accept_address;
-	int accept_fd;
-	socklen_t address_size = sizeof(accept_address);
-
-	if ((accept_fd = accept(this->fd, (struct sockaddr *)&accept_address, &address_size)) == -1)
-		throw std::runtime_error("Could not accept connection: " + std::string(strerror(errno)));
-	users[accept_fd] = User();
-	return accept_fd;
+	for (std::map<int, User>::iterator it = users.begin(); it != users.end(); ++it)
+		it->second.queue_message(message);
 }
