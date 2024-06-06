@@ -15,9 +15,9 @@ class Server
 	unsigned short port;
 	std::string password;
 	int fd;
-	struct sockaddr_in address;
+	struct sockaddr_in address; // 127.0.0.1:1234
 	volatile sig_atomic_t &signal;
-	std::map<int, User> fd_user;
+	std::map<int, User> fd_user; // {5: User, 6: User, ...}
 	void broadcast(const std::string &message);
 	void list_fd_user();
 

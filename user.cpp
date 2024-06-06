@@ -8,6 +8,7 @@
 #include <sys/epoll.h>
 #include <iostream>
 #include <arpa/inet.h>
+#include "command.hpp"
 
 User::User(Server &s, int user_fd, struct sockaddr_in user_address, int main_epoll_fd)
 	: server(s), fd(user_fd), address(user_address), epoll_fd(main_epoll_fd), authenticated(false)
@@ -61,6 +62,12 @@ ssize_t User::receive_data()
 		throw std::runtime_error("Message too long");
 	}
 
+	while (!incoming_messages.empty())
+	{
+		std::string message = incoming_messages.front();
+		// Command(message, *this).execute();
+		incoming_messages.pop();
+	}
 	return bytes_read;
 }
 
