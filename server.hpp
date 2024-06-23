@@ -26,5 +26,6 @@ public:
 		   volatile sig_atomic_t &signal);
 	~Server();
 	void run();
+	bool nick_exists(const std::string &nick);
 	bool verify_password(const std::string &pass) const;
 };

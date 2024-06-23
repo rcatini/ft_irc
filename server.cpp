@@ -158,3 +158,11 @@ bool Server::verify_password(const std::string &pass) const
 {
 	return pass == password;
 }
+
+bool Server::nick_exists(const std::string &nick)
+{
+	for (std::map<int, User>::const_iterator it = fd_user.begin(); it != fd_user.end(); ++it)
+		if (it->second.get_nickname() == nick)
+			return true;
+	return false;
+}

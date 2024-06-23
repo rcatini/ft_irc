@@ -65,8 +65,10 @@ ssize_t User::receive_data()
 	while (!incoming_messages.empty())
 	{
 		std::string message = incoming_messages.front();
-		// Command(message, *this).execute();
 		incoming_messages.pop();
+		Command command(server, message);
+		// command.print();
+		command.execute(this);
 	}
 	return bytes_read;
 }
@@ -88,7 +90,6 @@ ssize_t User::send_data()
 		throw std::runtime_error("Could not write to user socket: " + std::string(strerror(errno)));
 	else
 		outgoing_buffer.erase(0, (unsigned long)bytes_sent);
-
 	return bytes_sent;
 }
 
@@ -116,10 +117,19 @@ bool User::authenticate(const std::string &password)
 		throw std::runtime_error("User already authenticated");
 
 	if (server.verify_password(password))
-	{
-		authenticated = true;
-		return true;
-	}
-
+		return authenticated = true;
 	return false;
+}
+
+std::string const &User::get_nickname() const
+{
+	return nickname;
+}
+
+bool User::set_nickname(const std::string &nick)
+{
+	if (server.nick_exists(nick))
+		return false;
+	nickname = nick;
+	return true;
 }
